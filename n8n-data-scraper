@@ -1,0 +1,438 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -64,
+        144
+      ],
+      "id": "3f0e9506-f835-454b-8353-b262a7db09af",
+      "name": "When chat message received",
+      "webhookId": "HIDDEN_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst chatInput = data.search_parameters?.q || $('When chat message received').first().json.chatInput || '';\n\n// Extract requested number from chat input\nconst numberMatch = chatInput.match(/(\\d+)/);\nconst requestedCount = numberMatch ? parseInt(numberMatch[1]) : 10;\n\nconst places = [];\n\nif (data.local_results && data.local_results.length > 0) {\n  for (let i = 0; i < Math.min(requestedCount, data.local_results.length); i++) {\n    const place = data.local_results[i];\n    \n    places.push({\n      name: place.title || 'Not available',\n      address: place.address || 'Not available',\n      phone: place.phone || 'Not available',\n      website: place.website || 'Not available',\n      hours: place.hours || 'Not available',\n      place_id: place.data_id || place.place_id || place.data_cid,\ndata_id: place.data_id,\n      rating: place.rating || 'Not available',\n      reviews: place.reviews || 'Not available'\n    });\n  }\n}\n\n// If not enough results, pad with empty entries\nwhile (places.length < requestedCount) {\n  places.push({\n    name: `No result ${places.length + 1}`,\n    address: 'Not available',\n    phone: 'Not available',\n    website: 'Not available',\n    hours: 'Not available',\n    place_id: null,\n    rating: 'Not available',\n    reviews: 'Not available'\n  });\n}\n\nreturn places.map(p => ({ json: p }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        144
+      ],
+      "id": "296bf28d-f93a-4efc-81e1-015449a34e01",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "HIDDEN_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Leads Gen - AI Agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/HIDDEN_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/HIDDEN_SHEET_ID/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.Name }}",
+            "Address": "={{ $json.Address }}",
+            "Phone": "={{ $json.Number }}",
+            "Email": "={{ $json.Email }}",
+            "Instagram": "={{ $json.Instagram }}",
+            "Website": "={{ $json.Website }}"
+          },
+          "matchingColumns": [
+            "UUID"
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1728,
+        144
+      ],
+      "id": "0ed1e876-de13-457a-9d68-36efa955df1b",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A3EVs8pBgZR5rF3T",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.chatInput }} "
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.SERPAPI_KEY }}"
+            },
+            {
+              "name": "engine",
+              "value": "google_maps"
+            },
+            {
+              "name": "type",
+              "value": "search"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        144
+      ],
+      "id": "06880647-1e0e-479e-97aa-2b22f98ca1ab",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "=https://serpapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "=google_maps"
+            },
+            {
+              "name": "type",
+              "value": "place"
+            },
+            {
+              "name": "data_cid",
+              "value": "={{ $json.data_id }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.SERPAPI_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        608,
+        144
+      ],
+      "id": "a04d6447-c363-4804-8a5a-4678e68038cc",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const inputItem = item.json;\n  const place = inputItem.place_results || inputItem.place_result || {};\n\n  const name = place.title || place.name || 'Not available';\n  const address = place.address || place.formatted_address || 'Not available';\n  const phone = place.phone || place.phone_number || 'Not available';\n  const website = place.website || place.links?.website || 'Not available';\n\n  let hours = 'Not available';\n  if (Array.isArray(place.hours)) {\n    hours = place.hours.map(h => h.text || h).join(', ');\n  } else if (place.opening_hours?.weekday_text) {\n    hours = place.opening_hours.weekday_text.join(', ');\n  }\n\n  const { instagram, email } = extractContacts(inputItem, place);\n\n  return {\n    json: {\n      Name: name,\n      Address: address,\n      Number: phone,\n      Website: website,\n      Instagram: instagram,\n      'Opening Hours': hours,\n      Email: email,\n      igSearchQuery: `${name} instagram official`\n    }\n  };\n});\n\nfunction extractContacts(inputItem, place) {\n  const placeString = JSON.stringify(inputItem);\n  let instagram = 'Not available';\n  let email = 'Not available';\n\n  // --- Instagram extraction (keep as is) ---\n  const igMatch = placeString.match(/instagram\\.com\\/([a-zA-Z0-9._]+)/i);\n  if (igMatch && igMatch[1]) {\n    const username = igMatch[1];\n    if (!['explore', 'reels', 'p', 'stories', 'tv'].includes(username.toLowerCase())) {\n      instagram = username;\n    }\n  }\n\n  // --- IMPROVED Email extraction ---\n  \n  // Method 1: Check place.website domain for email\n  if (place.website) {\n    const domain = place.website.match(/https?:\\/\\/(?:www\\.)?([^\\/]+)/i);\n    if (domain && domain[1]) {\n      // Common email patterns\n      const commonEmails = [\n        `info@${domain[1]}`,\n        `contact@${domain[1]}`,\n        `hello@${domain[1]}`\n      ];\n      // We'll mark these as potential emails (optional)\n    }\n  }\n\n  // Method 2: Extract from entire JSON\n  const emailRegex = /([a-zA-Z0-9][a-zA-Z0-9._-]*@[a-zA-Z0-9][a-zA-Z0-9._-]*\\.[a-zA-Z]{2,})/gi;\n  const emailMatches = placeString.match(emailRegex);\n  \n  if (emailMatches && emailMatches.length > 0) {\n    // Filter out garbage emails\n    const blacklist = [\n      'example.com', \n      'google.com', \n      'serpapi.com', \n      'gstatic.com',\n      'gmail.com',\n      'test.com',\n      'sample.com',\n      'noreply',\n      'no-reply',\n      'donotreply'\n    ];\n    \n    const validEmails = emailMatches.filter(e => {\n      const lower = e.toLowerCase();\n      return !blacklist.some(bad => lower.includes(bad)) && \n             e.length < 100 && // Not too long\n             !e.match(/\\.(png|jpg|jpeg|gif|webp|svg)$/i); // Not image files\n    });\n    \n    if (validEmails.length > 0) {\n      email = validEmails[0];\n    }\n  }\n\n  // Method 3: Check specific fields that often contain emails\n  const checkFields = [\n    place.email,\n    place.contact?.email,\n    place.business_email,\n    place.owner_email\n  ];\n  \n  for (const field of checkFields) {\n    if (field && typeof field === 'string' && field.includes('@')) {\n      email = field;\n      break;\n    }\n  }\n\n  return { instagram, email };\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        144
+      ],
+      "id": "f8c191e7-bfbb-4410-b7f3-9585f99bfc44",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "=google"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.igSearchQuery }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $env.SERPAPI_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        144
+      ],
+      "id": "3af425e2-6b8c-481e-8917-9a7a5e017a02",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Process single item from loop\nconst data = $json;\n\n// Get the paired item from the previous execution\nconst pairedItem = $('Loop Over Items1').item.json;\n\nlet instagram = pairedItem?.Instagram || 'Not available';\n\n// Extract Instagram from search results\nif (instagram === 'Not available' && data.organic_results) {\n  for (const result of data.organic_results) {\n    const link = result.link || '';\n    \n    if (link.includes('instagram.com')) {\n      const match = link.match(/instagram\\.com\\/([a-zA-Z0-9._]+)/i);\n      if (match && match[1]) {\n        const username = match[1];\n        if (!['explore', 'reels', 'p', 'stories', 'tv', 'about', 'accounts', 'direct'].includes(username.toLowerCase())) {\n          instagram = username;\n          break;\n        }\n      }\n    }\n  }\n}\n\n// Format Instagram as clickable link\nlet instagramLink = 'Not available';\nif (instagram !== 'Not available') {\n  instagramLink = `=HYPERLINK(\"https://www.instagram.com/${instagram}\", \"@${instagram}\")`;\n}\n\nreturn {\n  json: {\n    Name: pairedItem?.Name || 'Not available',\n    Address: pairedItem?.Address || 'Not available',\n    Number: pairedItem?.Number || 'Not available',\n    Website: pairedItem?.Website || 'Not available',\n    Instagram: instagramLink,\n    'Opening Hours': pairedItem?.['Opening Hours'] || 'Not available',\n    Email: pairedItem?.Email || 'Not available'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        144
+      ],
+      "id": "9773608d-c4f7-4231-89b6-409a8e279209",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1056,
+        144
+      ],
+      "id": "df908a2b-0d8e-4606-8118-cce2203d0255",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_VALUE",
+          "mode": "list",
+          "cachedResultName": "Leads Gen - AI Agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.Name }}",
+            "Address": "={{ $json.Address }}",
+            "Phone": "={{ $json.Number }}",
+            "Email": "={{ $json.Email }}",
+            "Instagram": "={{ $json.Instagram }}",
+            "Website": "={{ $json.Website }}"
+          },
+          "matchingColumns": [
+            "UUID"
+          ],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Address",
+              "displayName": "Address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Website",
+              "displayName": "Website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Instagram",
+              "displayName": "Instagram",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Opening Hours",
+              "displayName": "Opening Hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2496,
+        816
+      ],
+      "id": "dc0cf762-caaf-489e-9db3-7711129a08ed",
+      "name": "Append row in sheet1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "meta": {
+    "instanceId": "e435661549ba61b6e7be9cb39e262045384ae24d21922e6cdf8382ae8b00d68d"
+  },
+  "tags": []
+}
