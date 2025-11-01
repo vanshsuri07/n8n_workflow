@@ -1,0 +1,362 @@
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-2704, 4704],
+      "name": "Manual Trigger",
+      "id": "bed7f3f4-f3bd-4be6-90a6-36afc1761845"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "topic",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [-2256, 4704],
+      "id": "dd7d479b-b003-407f-98a1-4a4297ceb283",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"topic\": [\"HTML\"]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-2464, 4704],
+      "id": "5170d36c-1957-430a-a6af-1c2211ce7840",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst results = [];\n\nallItems.forEach((item, index) => {\n  const scheduleTime = new Date();\n  \n  // START FROM TOMORROW - add (index + 1) instead of just index\n  scheduleTime.setDate(scheduleTime.getDate() + index + 1);\n  scheduleTime.setHours(11, 0, 0, 0);\n  \n  const unixTimestamp = Math.floor(scheduleTime.getTime() / 1000);\n  \n  results.push({\n    json: {\n      ...item.json,\n      scheduled_publish_time: unixTimestamp,\n      scheduled_date: scheduleTime.toISOString(),\n      day_number: index + 1\n    }\n  });\n});\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-704, 4720],
+      "id": "5b8ee42a-19ec-438a-864c-cf8afa25a54c",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "functionCode": "const imgs = $json.images_results || [];\nif (!imgs.length) {\n  return [{ json: { error: \"No images found\" } }];\n}\n\n// Filter out items without a proper original URL\nconst validImages = imgs.filter(i => i.original && i.original.startsWith('http'));\n\nif (!validImages.length) {\n  return [{ json: { error: \"No valid images found\" } }];\n}\n\n// Sort by relevance: title contains 'cheat', then by size (width*height if available)\nconst sorted = validImages.sort((a, b) => {\n  const aScore = (a.title?.toLowerCase().includes('cheat') ? 10 : 0)\n               + ((a.width || 0) * (a.height || 0));\n  const bScore = (b.title?.toLowerCase().includes('cheat') ? 10 : 0)\n               + ((b.width || 0) * (b.height || 0));\n  return bScore - aScore;\n});\n\nconst best = sorted[0];\n\nreturn [{\n  json: {\n    title: best.title,\n    image_url: best.original,\n    width: best.width,\n    height: best.height,\n    source: best.source\n  }\n}];\n"
+      },
+      "id": "20444de6-e6db-41e8-8b82-650bc75fc805",
+      "name": "Extract Best Image URL1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [-1392, 4816]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash-preview-image-generation",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.0-flash-preview-image-generation"
+        },
+        "prompt": "=Create a visually stunning, futuristic tech-themed poster for \" {{ $('Split Out').item.json.topic }}Cheat Sheet\". \nThe design should instantly grab attention on Instagram — clean, modern, and premium-looking. \nUse glowing gradients, dynamic lighting, and subtle depth effects to make it feel 3D and high-end. \nThe text \"{{$json.topic}} Cheat Sheet\" should be bold, perfectly readable, and centered as the main focus. \nInclude minimal but elegant UI or code-inspired elements in the background. \nMake the image feel so visually satisfying that viewers want to save and share it.\n",
+        "options": {
+          "binaryPropertyOutput": "image"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [-1584, 4608],
+      "id": "9fecd7a0-0915-44d9-9ae2-58789c5c31e1",
+      "name": "Generate AI Cover Image1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GOOGLE_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/YOUR_INSTAGRAM_ACCOUNT_ID/media",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $json.body.data.url }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.facebookAccessToken }}"
+            },
+            {
+              "name": "is_carousel_item",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1184, 4608],
+      "id": "1b2544f8-1343-4f58-b2b9-962f3c83940c",
+      "name": "Upload Cover Image1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/YOUR_INSTAGRAM_ACCOUNT_ID/media",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $json.image_url }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.facebookAccessToken }}"
+            },
+            {
+              "name": "is_carousel_item",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1184, 4816],
+      "id": "c6e5cadc-4ce0-4c68-8aeb-25e8e839d432",
+      "name": "Upload Content Image1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [-928, 4720],
+      "id": "27760acb-276c-4875-950b-86a3ea2276e2",
+      "name": "Merge Both Uploads1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get both uploaded media items\nconst allItems = $input.all();\nif (allItems.length < 2) {\n  throw new Error('Need 2 uploaded media items for carousel');\n}\n\nconst mediaId1 = allItems[0].json.id;\nconst mediaId2 = allItems[1].json.id;\n\n// Get the generated caption from the AI node\nconst generatedCaption = $('Generate Cheat Sheet Text2').item.json.message.content || \n                         $('Generate Cheat Sheet Text2').item.json.text ||\n                         'Cheat Sheet 📝\\n\\nSwipe for more! ➡️';\n\n// Get the topic to make caption dynamic\nconst topic = $('Split Out').item.json.topic;\n\n// Calculate schedule time for this specific post\nconst topicIndex = [\"HTML\", \"CSS\", \"JavaScript\", \"React\", \"Tailwind\", \"REST API\"].indexOf(topic);\nconst scheduleTime = new Date();\n\n// START FROM TOMORROW\nscheduleTime.setDate(scheduleTime.getDate() + topicIndex + 1);\nscheduleTime.setHours(11, 0, 0, 0); // 11 AM\n\nconst unixTimestamp = Math.floor(scheduleTime.getTime() / 1000);\n\nconsole.log(`Scheduling ${topic} for ${scheduleTime.toISOString()}`);\n\nreturn {\n  json: {\n    media_id_1: mediaId1,\n    media_id_2: mediaId2,\n    children: `${mediaId1},${mediaId2}`,\n    caption: generatedCaption,\n    scheduled_publish_time: unixTimestamp,\n    topic: topic,\n    scheduled_date: scheduleTime.toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-416, 4704],
+      "name": "Prepare Carousel Container1",
+      "id": "813c4273-4343-45cb-9eb9-b0ee02c5a075"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/YOUR_INSTAGRAM_ACCOUNT_ID/media_publish",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.facebookAccessToken }}"
+            },
+            {
+              "name": "scheduled_publish_time",
+              "value": "={{ $('Prepare Carousel Container1').item.json.scheduled_publish_time }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [208, 4720],
+      "id": "df5b74c1-1c5a-4e19-9873-f36258f64cfc",
+      "name": "Publish Carousel Post1"
+    },
+    {
+      "parameters": {
+        "modelId": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "=Generate an engaging Instagram caption for a carousel post about {{ $json.topic }} cheat sheets. The caption should start with a hook that grabs attention, mention it's a cheat sheet for {{ $json.topic }}, include a call-to-action to swipe through the carousel, add 5–8 relevant hashtags about {{ $json.topic }}, coding, web development, and learning, keep it under 150 words, and make it beginner-friendly and encouraging. Return only the caption text, no extra formatting.\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [-2048, 4704],
+      "name": "Generate Cheat Sheet Text2",
+      "id": "de448f23-a7a1-4f81-8585-1f48177f8055",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://serpapi.com/search.json?engine=google_images&q={{encodeURI($('Split Out').item.json.topic + \" cheat sheet\")}}&api_key={{ $credentials.serpApiKey }}",
+        "options": {}
+      },
+      "id": "53d1abbd-0e17-4234-9553-325f9df460f9",
+      "name": "Search HTML Cheat Sheet Image2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1584, 4816]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/YOUR_INSTAGRAM_ACCOUNT_ID/media",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "CAROUSEL"
+            },
+            {
+              "name": "children",
+              "value": "={{ $json.children }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.caption }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $credentials.facebookAccessToken }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-80, 4720],
+      "id": "dc067372-8d8f-44ba-8d95-d73f665690f0",
+      "name": "Create Carousel Container3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.imgbb.com/1/upload",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $credentials.imgbbApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image",
+              "value": "={{ $json.imageBase64 }}"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {}
+          },
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-1136, 4288],
+      "name": "Upload PNG to file.io2",
+      "id": "7f64d17b-62e6-4d05-981a-b4a05848ac60"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the binary image data\nif (!$input.first().binary || !$input.first().binary.image) {\n  throw new Error(\"No binary image found\");\n}\n\nconst imageBuffer = $input.first().binary.image.data;\nconst base64String = imageBuffer.toString('base64');\n\n// Return as JSON so ImgBB can receive it as form field\nreturn {\n  json: {\n    imageBase64: base64String\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1472, 4288],
+      "id": "6906c49f-646d-447e-a243-dab19927de54",
+      "name": "Code in JavaScript4"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{"node": "Edit Fields", "type": "main", "index": 0}]]
+    },
+    "Split Out": {
+      "main": [[{"node": "Generate Cheat Sheet Text2", "type": "main", "index": 0}]]
+    },
+    "Edit Fields": {
+      "main": [[{"node": "Split Out", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript3": {
+      "main": [[{"node": "Prepare Carousel Container1", "type": "main", "index": 0}]]
+    },
+    "Extract Best Image URL1": {
+      "main": [[{"node": "Upload Content Image1", "type": "main", "index": 0}]]
+    },
+    "Generate AI Cover Image1": {
+      "main": [[{"node": "Code in JavaScript4", "type": "main", "index": 0}]]
+    },
+    "Upload Cover Image1": {
+      "main": [[{"node": "Merge Both Uploads1", "type": "main", "index": 0}]]
+    },
+    "Upload Content Image1": {
+      "main": [[{"node": "Merge Both Uploads1", "type": "main", "index": 1}]]
+    },
+    "Merge Both Uploads1": {
+      "main": [[{"node": "Code in JavaScript3", "type": "main", "index": 0}]]
+    },
+    "Prepare Carousel Container1": {
+      "main": [[{"node": "Create Carousel Container3", "type": "main", "index": 0}]]
+    },
+    "Generate Cheat Sheet Text2": {
+      "main": [
+        [
+          {"node": "Generate AI Cover Image1", "type": "main", "index": 0},
+          {"node": "Search HTML Cheat Sheet Image2", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Search HTML Cheat Sheet Image2": {
+      "main": [[{"node": "Extract Best Image URL1", "type": "main", "index": 0}]]
+    },
+    "Create Carousel Container3": {
+      "main": [[{"node": "Publish Carousel Post1", "type": "main", "index": 0}]]
+    },
+    "Upload PNG to file.io2": {
+      "main": [[{"node": "Upload Cover Image1", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript4": {
+      "main": [[{"node": "Upload PNG to file.io2", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  }
+}
